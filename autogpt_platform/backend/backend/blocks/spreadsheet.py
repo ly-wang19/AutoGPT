@@ -84,6 +84,11 @@ class ReadSpreadsheetBlock(Block):
                     "contents": "a, b, c\n1,2,3\n4,5,6",
                     "produce_singular_result": True,
                 },
+                {
+                    "contents": "a, b, c\n1,2,3\n4,5,6",
+                    "skip_columns": ["b"],
+                    "produce_singular_result": False,
+                },
             ],
             test_output=[
                 (
@@ -95,6 +100,14 @@ class ReadSpreadsheetBlock(Block):
                 ),
                 ("row", {"a": "1", "b": "2", "c": "3"}),
                 ("row", {"a": "4", "b": "5", "c": "6"}),
+                # skip_columns=["b"] must drop column "b" by name.
+                (
+                    "rows",
+                    [
+                        {"a": "1", "c": "3"},
+                        {"a": "4", "c": "6"},
+                    ],
+                ),
             ],
         )
 
@@ -173,11 +186,12 @@ class ReadSpreadsheetBlock(Block):
         def process_row(row):
             data = {}
             for i, value in enumerate(row):
-                if i not in input_data.skip_columns:
-                    if input_data.has_header and header:
-                        data[header[i]] = value.strip() if input_data.strip else value
-                    else:
-                        data[str(i)] = value.strip() if input_data.strip else value
+                # `skip_columns` is a list[str] of column names, so resolve this
+                # column's name first and skip by name (comparing the integer
+                # index `i` against the string list never matched anything).
+                column_name = header[i] if input_data.has_header and header else str(i)
+                if column_name not in input_data.skip_columns:
+                    data[column_name] = value.strip() if input_data.strip else value
             return data
 
         rows = [process_row(row) for row in reader]
